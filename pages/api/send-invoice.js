@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     }
 
     // BUILD PRINT LINK
-    const appUrl   = (process.env.NEXT_PUBLIC_APP_URL || 'https://mrm-invoices.vercel.app').replace(/\/$/, '')
+    const appUrl = 'https://mrm-print.vercel.app'
     const printUrl = `${appUrl}/invoice/${invoice.id}`
 
     // SEND EMAIL NOW
