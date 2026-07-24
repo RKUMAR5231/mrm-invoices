@@ -34,10 +34,12 @@ export default async function handler(req, res) {
         to_addr      TEXT,
         to_email     TEXT,
         to_phone     TEXT,
-        lines        TEXT DEFAULT '[]',
-        notes        TEXT,
-        total        REAL DEFAULT 0,
-        last_emailed TEXT
+        lines            TEXT DEFAULT '[]',
+        notes            TEXT,
+        total            REAL DEFAULT 0,
+        last_emailed     TEXT,
+        resend_email_id  TEXT,
+        opened_at        TEXT
       );
 
       CREATE TABLE IF NOT EXISTS scheduled_emails (
@@ -53,6 +55,15 @@ export default async function handler(req, res) {
         invoice_snapshot TEXT
       );
     `)
+
+    // Add columns for the email-opened notification feature to databases
+    // that already exist (ALTER TABLE has no "IF NOT EXISTS" for columns).
+    for (const alter of [
+      'ALTER TABLE invoices ADD COLUMN resend_email_id TEXT',
+      'ALTER TABLE invoices ADD COLUMN opened_at TEXT',
+    ]) {
+      try { await db.execute(alter) } catch (_) {}
+    }
 
     return res.status(200).json({
       success: true,
