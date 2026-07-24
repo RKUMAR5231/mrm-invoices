@@ -451,6 +451,11 @@ export default function Home() {
                       &#128231; Emailed {new Date(inv.last_emailed).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
                     </div>
                   )}
+                  {inv.opened_at && (
+                    <div style={{fontSize:10,color:'#f07030',marginTop:2,fontFamily:'monospace'}}>
+                      &#128065; Opened {new Date(inv.opened_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+                    </div>
+                  )}
                 </div>
                 <span className={`badge b-${inv.status}`}>{inv.status}</span>
                 <div className="inv-amt">${(inv.total || 0).toFixed(2)}</div>
@@ -564,6 +569,7 @@ export default function Home() {
           <div className="feature-list">
             <div className="feature-item">&#128274; <strong>Password Protection</strong> — Browser login required to access this app</div>
             <div className="feature-item">&#128231; <strong>Email Invoices</strong> — Send now or schedule for a future date via Resend</div>
+            <div className="feature-item">&#128065; <strong>Open Notifications</strong> — Get emailed the moment a client opens an invoice</div>
             <div className="feature-item">&#10697; <strong>Duplicate Invoice</strong> — Clone any invoice; service dates auto-advance 1 month</div>
             <div className="feature-item">&#128308; <strong>Overdue Detection</strong> — Past-due unpaid invoices highlighted automatically</div>
           </div>

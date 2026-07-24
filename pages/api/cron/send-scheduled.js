@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { getPendingScheduledEmails, updateScheduledEmailStatus } = await import('../../../lib/db.js')
+    const { getPendingScheduledEmails, updateScheduledEmailStatus, updateEmailSent } = await import('../../../lib/db.js')
     const pending = await getPendingScheduledEmails()
 
     if (!pending.length) {
@@ -43,7 +43,11 @@ export default async function handler(req, res) {
         })
 
         if (response.ok) {
+          const data = await response.json()
           await updateScheduledEmailStatus(job.id, 'sent', { sent_at: new Date().toISOString() })
+          if (job.invoice_id) {
+            try { await updateEmailSent(job.invoice_id, data.id) } catch (_) {}
+          }
           sent++
         } else {
           const err = await response.json()

@@ -67,11 +67,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: `Resend error: ${msg}` })
     }
 
-    // Mark invoice as emailed in Turso
+    // Mark invoice as emailed in Turso and remember the Resend email id
+    // so the /api/webhooks/resend endpoint can match "opened" events back to it.
     if (invoice.id) {
       try {
-        const { updateLastEmailed } = await import('../../lib/db.js')
-        await updateLastEmailed(invoice.id)
+        const { updateEmailSent } = await import('../../lib/db.js')
+        await updateEmailSent(invoice.id, resendData.id)
       } catch (_) {}
     }
 
