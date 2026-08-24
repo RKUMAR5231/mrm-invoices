@@ -124,6 +124,109 @@ function InvoiceDoc({ inv }) {
 }
 
 // ── Email Modal ───────────────────────────────────────────────────
+
+// ── Reminder Modal with Templates ────────────────────────────────────
+function ReminderModal({ inv, onClose }) {
+  const [to,       setTo]       = useState(inv.to_email || '')
+  const [name,     setName]     = useState(inv.to_name  || '')
+  const [template, setTemplate] = useState('friendly')
+  const [custom,   setCustom]   = useState('')
+  const [sending,  setSending]  = useState(false)
+  const [done,     setDone]     = useState(false)
+  const [err,      setErr]      = useState('')
+
+  const TEMPLATES = [
+    { id: 'friendly', label: '😊 Friendly Reminder',   desc: 'Polite first reminder, assumes good faith' },
+    { id: 'followup', label: '📋 Follow Up',            desc: 'Second notice, asks for payment status' },
+    { id: 'urgent',   label: '🚨 Urgent Notice',        desc: 'Strong tone, requests immediate payment' },
+    { id: 'custom',   label: '✏️ Custom Message',       desc: 'Write your own message' },
+  ]
+
+  async function send() {
+    if (!to) { setErr('Recipient email is required'); return }
+    if (template === 'custom' && !custom) { setErr('Please write your custom message'); return }
+    setSending(true); setErr('')
+    try {
+      const res  = await fetch('/api/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice: inv, recipientEmail: to, recipientName: name, template, customMessage: custom }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to send')
+      setDone(true)
+    } catch(e) { setErr(e.message) }
+    setSending(false)
+  }
+
+  const days = inv.due ? Math.floor((new Date() - new Date(inv.due)) / (1000*60*60*24)) : 0
+
+  return (
+    <div className="modal-bg">
+      <div className="modal modal-lg">
+        <div className="modal-hd">
+          <div className="modal-title">&#128276; Payment Reminder</div>
+          <button className="modal-close" onClick={onClose}>&#10005;</button>
+        </div>
+        {done ? (
+          <div style={{textAlign:'center',padding:'32px 0'}}>
+            <div style={{fontSize:40,marginBottom:12}}>&#10003;</div>
+            <div style={{fontSize:16,fontWeight:700,color:'#16a34a',marginBottom:8}}>Reminder Sent!</div>
+            <div style={{fontSize:13,color:'#555',marginBottom:20}}>Email sent to {to} — CC to rkumar@mrmwebsolutions.com</div>
+            <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          </div>
+        ) : (
+          <>
+            {err && <div className="error-msg">{err}</div>}
+            <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'12px 16px',marginBottom:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700}}>{inv.num} · {inv.to_name || 'Client'}</div>
+                <div style={{fontSize:12,color:'#555',marginTop:2}}>Due: {inv.due}{days > 0 ? ` · ${days} days overdue` : ''}</div>
+              </div>
+              <div style={{fontFamily:'monospace',fontSize:20,fontWeight:800,color:'#dc2626'}}>${(inv.total||0).toFixed(2)}</div>
+            </div>
+            <div className="form-grid" style={{marginBottom:16}}>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Send To (Email) *</label>
+                <input type="email" value={to} onChange={e=>setTo(e.target.value)} placeholder="client@company.com" />
+              </div>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Client Name</label>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="Contact name" />
+              </div>
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{display:'block',fontSize:12,fontWeight:600,color:'#475569',marginBottom:8}}>Choose Email Template</label>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {TEMPLATES.map(t => (
+                  <label key={t.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',border:`2px solid ${template===t.id?'#2563eb':'#e2e8f0'}`,borderRadius:8,cursor:'pointer',background:template===t.id?'#eff6ff':'#fff',transition:'.15s'}}>
+                    <input type="radio" name="template" value={t.id} checked={template===t.id} onChange={()=>setTemplate(t.id)} />
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600}}>{t.label}</div>
+                      <div style={{fontSize:11,color:'#94a3b8'}}>{t.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {template === 'custom' && (
+              <div className="form-group">
+                <label>Your Message</label>
+                <textarea value={custom} onChange={e=>setCustom(e.target.value)} rows={5} placeholder="Write your message here..." />
+                <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>Invoice summary and View & Print button added automatically below your message.</div>
+              </div>
+            )}
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={send} disabled={sending}>{sending ? 'Sending...' : '🔔 Send Reminder'}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function EmailModal({ inv, onClose }) {
   const [to,        setTo]        = useState(inv.to_email || '')
   const [name,      setName]      = useState(inv.to_name  || '')
@@ -226,6 +329,7 @@ export default function Home() {
   const [form,      setForm]      = useState(blank())
   const [preview,   setPreview]   = useState(null)
   const [emailInv,  setEmailInv]  = useState(null)
+  const [reminderInv, setReminderInv] = useState(null)
   const [loading,   setLoading]   = useState(true)
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState('')
@@ -379,6 +483,7 @@ export default function Home() {
       <div id="print-zone" style={{ display: 'none' }} />
       <div className={`toast${toastOn ? ' show' : ''}`}>{toastMsg}</div>
       {emailInv && <EmailModal inv={emailInv} onClose={() => setEmailInv(null)} />}
+      {reminderInv && <ReminderModal inv={reminderInv} onClose={() => setReminderInv(null)} />}
 
       <header className="app-header">
         <div className="hdr-logo">
@@ -451,17 +556,14 @@ export default function Home() {
                       &#128231; Emailed {new Date(inv.last_emailed).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
                     </div>
                   )}
-                  {inv.opened_at && (
-                    <div style={{fontSize:10,color:'#f07030',marginTop:2,fontFamily:'monospace'}}>
-                      &#128065; Opened {new Date(inv.opened_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
-                    </div>
-                  )}
                 </div>
                 <span className={`badge b-${inv.status}`}>{inv.status}</span>
                 <div className="inv-amt">${(inv.total || 0).toFixed(2)}</div>
                 <div className="inv-acts">
                   <button className="btn btn-ghost btn-sm" title="Preview"   onClick={() => setPreview(inv)}>&#128065;</button>
                   <button className="btn btn-ghost btn-sm" title="Email"     onClick={() => setEmailInv(inv)}>&#128231;</button>
+                  <button className="btn btn-ghost btn-sm" title="Send Reminder" onClick={() => setReminderInv(inv)} style={{color:'var(--orange)',fontSize:14}}>&#128276;</button>
+                  <button className="btn btn-ghost btn-sm" title="Send Reminder" onClick={() => setReminderInv(inv)} style={{color:'#f07030'}}>&#128276;</button>
                   <button className="btn btn-ghost btn-sm" title={inv.status==='paid'?'Mark Unpaid':'Mark Paid'} onClick={() => togglePaid(inv)}>{inv.status==='paid'?'&#8617;':'&#10003;'}</button>
                   <button className="btn btn-ghost btn-sm" title="Duplicate" onClick={() => duplicateInvoice(inv)}>&#10697;</button>
                   <button className="btn btn-ghost btn-sm" title="Edit"      onClick={() => editInvoice(inv)}>&#9999;&#65039;</button>
@@ -569,7 +671,6 @@ export default function Home() {
           <div className="feature-list">
             <div className="feature-item">&#128274; <strong>Password Protection</strong> — Browser login required to access this app</div>
             <div className="feature-item">&#128231; <strong>Email Invoices</strong> — Send now or schedule for a future date via Resend</div>
-            <div className="feature-item">&#128065; <strong>Open Notifications</strong> — Get emailed the moment a client opens an invoice</div>
             <div className="feature-item">&#10697; <strong>Duplicate Invoice</strong> — Clone any invoice; service dates auto-advance 1 month</div>
             <div className="feature-item">&#128308; <strong>Overdue Detection</strong> — Past-due unpaid invoices highlighted automatically</div>
           </div>
