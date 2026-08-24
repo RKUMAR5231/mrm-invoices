@@ -1,4 +1,7 @@
 // pages/api/send-invoice.js
+// Sends invoice email via IONOS SMTP for maximum deliverability
+// Replaces Resend — works with Microsoft/Outlook clients
+
 export const config = { api: { bodyParser: { sizeLimit: '2mb' } } }
 
 export default async function handler(req, res) {
@@ -14,10 +17,14 @@ export default async function handler(req, res) {
     if (!invoice)        return res.status(400).json({ error: 'Missing invoice data' })
     if (!recipientEmail) return res.status(400).json({ error: 'Missing recipient email' })
 
-    const RESEND_API_KEY = process.env.RESEND_API_KEY
-    if (!RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not set in Vercel environment variables.' })
+    // IONOS SMTP credentials from environment variables
+    const SMTP_USER = process.env.IONOS_SMTP_USER  // rkumar@mrmwebsolutions.com
+    const SMTP_PASS = process.env.IONOS_SMTP_PASS  // your IONOS email password
+    if (!SMTP_USER || !SMTP_PASS) {
+      return res.status(500).json({ error: 'IONOS SMTP credentials not set. Add IONOS_SMTP_USER and IONOS_SMTP_PASS in Vercel environment variables.' })
+    }
 
-    // SCHEDULED — save to Turso for cron to send later
+    // ── SCHEDULED ──
     if (scheduledFor) {
       const { insertScheduledEmail } = await import('../../lib/db.js')
       await insertScheduledEmail({
@@ -30,53 +37,47 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, scheduled: true })
     }
 
-    // BUILD PRINT LINK
-    const appUrl = 'https://mrm-print.vercel.app'
+    // ── BUILD PRINT LINK ──
+    const appUrl   = 'https://mrm-print.vercel.app'
     const printUrl = `${appUrl}/invoice/${invoice.id}`
 
-    // SEND EMAIL NOW
-    const fromDomain  = process.env.EMAIL_DOMAIN || 'resend.dev'
-    const fromAddress = fromDomain === 'resend.dev' ? 'onboarding@resend.dev' : `info@${fromDomain}`
-    const invLabel    = invoice.num ? `#${invoice.num}` : ''
-    const svcLabel    = (invoice.sf || invoice.st)
+    // ── BUILD EMAIL ──
+    const invLabel = invoice.num ? `#${invoice.num}` : ''
+    const svcLabel = (invoice.sf || invoice.st)
       ? ` \u2014 For ${invoice.sf ? fmtDate(invoice.sf) : ''}${invoice.st ? '\u2013' + fmtDate(invoice.st) : ''}`
       : ''
     const subject = `Invoice ${invLabel} from MRM Web Solutions${svcLabel}`.trim()
 
-    let resendResponse, resendData
-    try {
-      resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from:     `MRM Web Solutions <${fromAddress}>`,
-          to:       [recipientEmail],
-          cc:       ['rkumar@mrmwebsolutions.com'],
-          subject,
-          html:     buildEmailHTML(invoice, printUrl),
-          reply_to: 'rkumar@mrmwebsolutions.com',
-        }),
-      })
-      resendData = await resendResponse.json()
-    } catch (fetchErr) {
-      return res.status(500).json({ error: 'Could not reach Resend API: ' + fetchErr.message })
-    }
+    // ── SEND VIA IONOS SMTP ──
+    const nodemailer = await import('nodemailer')
+    const transporter = nodemailer.default.createTransport({
+      host:   'smtp.ionos.com',
+      port:   465,
+      secure: true,        // SSL/TLS
+      auth: {
+        user: SMTP_USER,   // rkumar@mrmwebsolutions.com
+        pass: SMTP_PASS,
+      },
+    })
 
-    if (!resendResponse.ok) {
-      const msg = resendData?.message || resendData?.name || JSON.stringify(resendData)
-      return res.status(500).json({ error: `Resend error: ${msg}` })
-    }
+    await transporter.sendMail({
+      from:    `"MRM Web Solutions" <${SMTP_USER}>`,
+      to:      recipientEmail,
+      cc:      SMTP_USER,   // CC yourself on every invoice
+      replyTo: SMTP_USER,
+      subject,
+      html:    buildEmailHTML(invoice, printUrl),
+    })
 
-    // Mark invoice as emailed in Turso and remember the Resend email id
-    // so the /api/webhooks/resend endpoint can match "opened" events back to it.
+    // Mark as emailed in Turso
     if (invoice.id) {
       try {
-        const { updateEmailSent } = await import('../../lib/db.js')
-        await updateEmailSent(invoice.id, resendData.id)
+        const { updateLastEmailed } = await import('../../lib/db.js')
+        await updateLastEmailed(invoice.id)
       } catch (_) {}
     }
 
-    return res.status(200).json({ success: true, id: resendData.id })
+    return res.status(200).json({ success: true, sentFrom: SMTP_USER })
 
   } catch (err) {
     console.error('[send-invoice] error:', err)
@@ -205,7 +206,7 @@ function buildEmailHTML(inv, printUrl) {
         <table cellpadding="0" cellspacing="0" width="100%"><tr>
           <td>
             <div style="font-size:13px;font-weight:700;color:#1a2540;margin-bottom:5px">View &amp; Print Your Invoice</div>
-            <div style="font-size:11px;color:#555;line-height:1.7">Click the button to open a print-ready version. You can save it as a PDF or print it directly from your browser.</div>
+            <div style="font-size:11px;color:#555;line-height:1.7">Click the button to open a print-ready version. You can save it as a PDF or print directly from your browser.</div>
           </td>
           <td style="padding-left:20px;white-space:nowrap" align="right">
             <a href="${printUrl}" target="_blank"
