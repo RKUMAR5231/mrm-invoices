@@ -1,0 +1,161 @@
+// pages/api/cron/send-overdue-alert.js
+// Runs daily at 9am — emails YOU a list of overdue invoices
+// Add to vercel.json crons
+
+export default async function handler(req, res) {
+  const auth = req.headers['authorization']
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  try {
+    const { createClient } = await import('@libsql/client')
+    const db = createClient({
+      url:       process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
+
+    const today = new Date().toISOString().split('T')[0]
+
+    // Get all overdue invoices
+    const result = await db.execute({
+      sql: `SELECT i.*, c.company as client_name, c.email as client_email, c.phone as client_phone
+            FROM invoices i
+            LEFT JOIN clients c ON i.client_id = c.id
+            WHERE i.status IN ('sent', 'unpaid')
+            AND i.due < ?
+            ORDER BY i.due ASC`,
+      args: [today],
+    })
+
+    const overdue = result.rows.map(r => ({
+      ...r,
+      lines: JSON.parse(r.lines || '[]'),
+    }))
+
+    if (overdue.length === 0) {
+      return res.status(200).json({ message: 'No overdue invoices today' })
+    }
+
+    // Calculate days overdue for each
+    function daysOverdue(dueDate) {
+      const due  = new Date(dueDate)
+      const now  = new Date()
+      const diff = Math.floor((now - due) / (1000 * 60 * 60 * 24))
+      return diff
+    }
+
+    // Send alert email to yourself via IONOS
+    const nodemailer = await import('nodemailer')
+    const transporter = nodemailer.default.createTransport({
+      host:   'smtp.ionos.com',
+      port:   465,
+      secure: true,
+      auth: {
+        user: process.env.IONOS_SMTP_USER,
+        pass: process.env.IONOS_SMTP_PASS,
+      },
+    })
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://mrm-invoices.vercel.app'
+
+    const rows = overdue.map(inv => {
+      const days = daysOverdue(inv.due)
+      const urgency = days > 30 ? '🔴' : days > 14 ? '🟠' : '🟡'
+      return `
+        <tr>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4;font-weight:700">${urgency} ${inv.num || '—'}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4">${inv.client_name || '—'}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4;font-family:monospace;color:#e8410a;font-weight:700">$${(inv.total||0).toFixed(2)}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4;color:#dc2626">${inv.due}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4;font-weight:700;color:#dc2626">${days} days</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4;font-size:12px;color:#555">${inv.client_email || '—'}<br>${inv.client_phone || ''}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f0ece4">
+            <a href="${appUrl}" style="background:#e8410a;color:#fff;padding:6px 12px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:700">Open App</a>
+          </td>
+        </tr>`
+    }).join('')
+
+    const totalOverdue = overdue.reduce((s, i) => s + (parseFloat(i.total)||0), 0)
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:32px 16px">
+<tr><td align="center">
+<table width="700" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.10)">
+
+  <tr><td style="background:#dc2626;padding:22px 32px">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td>
+        <div style="font-size:20px;font-weight:800;color:#fff">⚠️ Overdue Invoice Alert</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:4px">MRM Web Solutions · ${new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</div>
+      </td>
+      <td align="right">
+        <div style="background:rgba(0,0,0,.2);border-radius:8px;padding:10px 16px;text-align:center">
+          <div style="font-size:11px;color:rgba(255,255,255,.7);margin-bottom:2px">Total Outstanding</div>
+          <div style="font-size:22px;font-weight:800;color:#fff;font-family:monospace">$${totalOverdue.toFixed(2)}</div>
+        </div>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td style="padding:24px 32px">
+    <p style="font-size:14px;color:#333;margin-bottom:20px">
+      You have <strong>${overdue.length} overdue invoice${overdue.length > 1 ? 's' : ''}</strong> that need attention.
+      Review the list below and follow up with each client.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      <thead>
+        <tr style="background:#1a2540">
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Invoice</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Client</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Amount</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Due Date</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Overdue</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Contact</th>
+          <th style="padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff;text-align:left">Action</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <!-- Urgency legend -->
+    <div style="margin-top:16px;padding:12px 16px;background:#f8f9fb;border-radius:8px;font-size:12px;color:#555">
+      🟡 1-14 days overdue &nbsp;·&nbsp; 🟠 15-30 days overdue &nbsp;·&nbsp; 🔴 30+ days overdue
+    </div>
+  </td></tr>
+
+  <tr><td style="background:#f8f9fb;border-top:2px solid #1a2540;padding:16px 32px;text-align:center">
+    <a href="${appUrl}" style="display:inline-block;background:#1a2540;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">
+      Open Invoice Dashboard
+    </a>
+    <div style="font-size:11px;color:#94a3b8;margin-top:10px">MRM Web Solutions · Automated Daily Alert · 9:00 AM</div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`
+
+    await transporter.sendMail({
+      from:    `"MRM Invoices Alert" <${process.env.IONOS_SMTP_USER}>`,
+      to:      process.env.IONOS_SMTP_USER,
+      subject: `⚠️ ${overdue.length} Overdue Invoice${overdue.length > 1 ? 's' : ''} — $${totalOverdue.toFixed(2)} Outstanding`,
+      html,
+    })
+
+    return res.status(200).json({
+      sent: true,
+      overdueCount: overdue.length,
+      totalOutstanding: totalOverdue,
+    })
+
+  } catch (err) {
+    console.error('[overdue-alert]', err)
+    return res.status(500).json({ error: err.message })
+  }
+}
