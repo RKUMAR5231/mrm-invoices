@@ -562,7 +562,6 @@ export default function Home() {
                 <div className="inv-acts">
                   <button className="btn btn-ghost btn-sm" title="Preview"   onClick={() => setPreview(inv)}>&#128065;</button>
                   <button className="btn btn-ghost btn-sm" title="Email"     onClick={() => setEmailInv(inv)}>&#128231;</button>
-                  <button className="btn btn-ghost btn-sm" title="Send Reminder" onClick={() => setReminderInv(inv)} style={{color:'var(--orange)',fontSize:14}}>&#128276;</button>
                   <button className="btn btn-ghost btn-sm" title="Send Reminder" onClick={() => setReminderInv(inv)} style={{color:'#f07030'}}>&#128276;</button>
                   <button className="btn btn-ghost btn-sm" title={inv.status==='paid'?'Mark Unpaid':'Mark Paid'} onClick={() => togglePaid(inv)}>{inv.status==='paid'?'&#8617;':'&#10003;'}</button>
                   <button className="btn btn-ghost btn-sm" title="Duplicate" onClick={() => duplicateInvoice(inv)}>&#10697;</button>
