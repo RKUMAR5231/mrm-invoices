@@ -200,6 +200,25 @@ function buildEmailHTML(inv, printUrl) {
 
   ${notesHtml}
 
+  <tr><td style="padding:0 32px 16px">
+    <table cellpadding="0" cellspacing="0" width="100%"><tr>
+      <td style="background:#f0fff4;border:1px solid #bbf7d0;border-radius:8px;padding:18px 20px">
+        <table cellpadding="0" cellspacing="0" width="100%"><tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#14532d;margin-bottom:5px">&#127968; Pay Online via ACH Bank Transfer</div>
+            <div style="font-size:11px;color:#555;line-height:1.7">Pay directly from your bank account — fast, secure, and free. No credit card needed.</div>
+          </td>
+          <td style="padding-left:20px;white-space:nowrap" align="right">
+            <a href="https://melio.me/MRMWebSolutions" target="_blank"
+              style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:7px;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif">
+              Pay Now via ACH
+            </a>
+          </td>
+        </tr></table>
+      </td>
+    </tr></table>
+  </td></tr>
+
   <tr><td style="padding:0 32px 24px">
     <table cellpadding="0" cellspacing="0" width="100%"><tr>
       <td style="background:#f0f7ff;border:1px solid #c8dff7;border-radius:8px;padding:18px 20px">
