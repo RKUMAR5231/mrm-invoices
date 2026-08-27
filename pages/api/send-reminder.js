@@ -132,8 +132,28 @@ export default async function handler(req, res) {
 
     ${tmpl.body}
 
+    <!-- ACH Payment button -->
+    <table cellpadding="0" cellspacing="0" style="margin-top:24px;margin-bottom:12px;width:100%">
+      <tr>
+        <td style="background:#f0fff4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px">
+          <table cellpadding="0" cellspacing="0" width="100%"><tr>
+            <td>
+              <div style="font-size:13px;font-weight:700;color:#14532d;margin-bottom:4px">&#127968; Pay Online via ACH Bank Transfer</div>
+              <div style="font-size:11px;color:#555;line-height:1.7">Fast, secure, and free — pay directly from your bank account.</div>
+            </td>
+            <td align="right" style="padding-left:16px;white-space:nowrap">
+              <a href="https://melio.me/MRMWebSolutions" target="_blank"
+                style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:11px 20px;border-radius:7px;font-size:13px;font-weight:700;font-family:Helvetica,sans-serif">
+                Pay Now
+              </a>
+            </td>
+          </tr></table>
+        </td>
+      </tr>
+    </table>
+
     <!-- View & Print button -->
-    <table cellpadding="0" cellspacing="0" style="margin-top:24px;margin-bottom:8px">
+    <table cellpadding="0" cellspacing="0" style="margin-bottom:8px">
       <tr>
         <td style="background:#e8410a;border-radius:7px;padding:13px 28px">
           <a href="${printUrl}" target="_blank" style="color:#fff;text-decoration:none;font-size:14px;font-weight:700;font-family:Helvetica,sans-serif">
