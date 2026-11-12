@@ -1,10 +1,12 @@
 // pages/api/invoices.js
-// GET all invoices, POST new invoice
+// GET all invoices, POST new invoice, PUT edit, PATCH status/last_emailed, DELETE
+// Every change to an INV-1600+ invoice is also pushed to mrm-accounting (best effort).
 
 import {
   getAllInvoices, getInvoiceById, insertInvoice, updateInvoice,
   deleteInvoice, updateInvoiceStatus, updateLastEmailed
 } from '../../lib/db.js'
+import { syncInvoiceToAccounting, deleteFromAccounting } from '../../lib/accountingSync.js'
 
 export default async function handler(req, res) {
   try {
@@ -23,6 +25,7 @@ export default async function handler(req, res) {
       const inv = req.body
       if (!inv) return res.status(400).json({ error: 'Missing invoice data' })
       const created = await insertInvoice(inv)
+      await syncInvoiceToAccounting(created)
       return res.status(201).json(created)
     }
 
@@ -30,13 +33,16 @@ export default async function handler(req, res) {
       const { id, ...inv } = req.body
       if (!id) return res.status(400).json({ error: 'Missing id' })
       const updated = await updateInvoice(id, inv)
+      await syncInvoiceToAccounting(updated)
       return res.status(200).json(updated)
     }
 
     if (req.method === 'DELETE') {
       const { id } = req.query
       if (!id) return res.status(400).json({ error: 'Missing id' })
+      const before = await getInvoiceById(id)
       await deleteInvoice(id)
+      await deleteFromAccounting(before)
       return res.status(200).json({ success: true })
     }
 
@@ -45,6 +51,7 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'Missing id' })
       if (status)       await updateInvoiceStatus(id, status)
       if (last_emailed) await updateLastEmailed(id)
+      await syncInvoiceToAccounting(await getInvoiceById(id))
       return res.status(200).json({ success: true })
     }
 
